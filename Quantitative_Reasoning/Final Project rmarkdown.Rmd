@@ -1,0 +1,1985 @@
+---
+title: 'Health Insurance Access Inequality in New York Counties: Bronx, Queens, Kings, New York (Manhattan)'
+output:
+  html_document:
+    toc: true
+    theme: united
+    toc_float: true
+toc_depth: 3
+number_sections: true
+theme: lumen
+
+date: '2022-12-06'
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Project Overview 
+
+***
+
+## Motivation
+* Covid-19 exacerbated the health inequality and there has been more discussion on public health issues
+
+* According to Community Service Society, in 2019, more than 1 million New Yorkers remained uninsured and New York ranks seventh among states on coverage.
+  + 34.5% are eligible for public insurance programs
+  + 42.1% have access through employer and self-purchased programs, yet not enrolled because of "cost, low perceived value, or other reasons"
+  + 24.5% does not have access to public health insurance program due to immigration status (There are health coverage options offered by NYC Care; if one is not eligible for any of the coverage option, they may be eligible to receive services under the NYC Health + Hospitals Options program)
+  
+* Access to health care insurance is crucial for a person’s physical well being and longevity. A healthy person can be more productive to the economy, provide financial and emotional support to their family, and contribute to their communities. 
+
+* Health insurance in US, however, is not covered universally and could be very expensive, especially if one do not have a job or their job does not offer healthcare benefits. Unexpected medical bills are extremely burdensome to the already uncovered and the financially disadvantaged individuals/families. 
+
+* Children, usually dependents of their parents on health insurance access, may be more vulnerable to health issues if their parents do not have health insurance coverages.
+
+#### Data
+* ACS 2015-2019 dataset
+
+#### Topic
+* Which independent variables correlates to people’s decision to enroll in health insurance? Independent variables: race, median household income, employment sectors, education attainment, place of origin/citizenship, poverty.
+
+* How can free health insurance get to the targeted population, such as those that are not able to afford or non eligible for any public programs? How can we find the neighborhood that are the most in need using the linear regression analysis?
+
+#### Methodology
+
+* In the first part, the study aims to understand correlations between access to health coverage and social-economic factors in NYC Bronx, Queens, Kings, and Manhattan at the census tract level. Unable to access health insurance may be positively related to lower household income/poverty, minority races, employment sectors, lower level of educational attainment, and citizenship status for the foreign origin population. The study also look into those factor's correlations with public insurance.
+
+* In the second part, the study investigate the correlations between children's (under 18) access to health coverage and social-economic factors in NYC Bronx, Queens, Kings, and Manhattan at the census tract level. Unable to access health insurance may be positively related to lower household income/poverty, minority races, school enrollment, employment status (if parents are employeed), and citizenship status for the foreign origin population. The study also look into those factor's correlations with public insurance.
+
+* I converted all the data, except for median household income, into percentage of population.
+
+
+#### Limitations: 
+  + There are different forms of health insurance. The study is not comprehensive to examine which type people are using or how much contribution people make
+  + One may gain access to insurance through their family members. This study does not measure who provides insurance plans for their dependents.
+  + This study looks at data prior to the Covid-19 pandemic, and thus not addressing many economic and policy-related changes and challenges incurred after 2020.
+
+***
+# Part I: Health Insurance Access 
+
+#### Setting up working environment
+
+```{r, echo=FALSE, warning = FALSE, message=FALSE}
+#library(xtable) # cross tabulation
+#library(janitor)  # percentage tabulation
+library(tidyverse) # R packages for data science
+library(dplyr)
+library(readxl)
+library(scales) 
+library(sjPlot)
+library(tibble)
+library(gganimate)
+library(broom)
+library(RColorBrewer)
+library(ggpubr)
+library(stargazer)
+library(scales)
+library(magrittr)
+```
+
+```{r warning = FALSE, message=FALSE}
+health_ins_dat <- read_csv("Final_project_data_edited_2.csv")
+to_add_dat <- read_csv("data_country_origin.csv")
+to_add_dat_2 <-read_csv("data_poverty_short.csv")
+
+health_ins_dat <- 
+  left_join(health_ins_dat, to_add_dat, by='Geo_GEOID')%>%left_join(., to_add_dat_2, by='Geo_GEOID')
+
+#glimpse(health_ins_dat)
+```
+
+***
+* Set up data as percentages of population  & analysis environment.
+* Here I am converting all the variables to study as percentages of population.
+The rows of data (census tracts) removed are the ones with no population and no household income. 
+
+* For the race data, I have grouped Total_Pop_Some_Other_Race_Alone, Total_Pop_Native_Hawaiian_and_Other_Pacific_Islander_Alone, and Total_Pop_American_Indian_and_Alaska_Native_Alone into one category.
+* For the education data, I grouped bachelor degree, master degree, and professional degree into one category, because they all represent higher education. High school degree or less than high school degree usually cause more barrier to work opportunities / income.
+* For the occupation data, I grouped Employed_Civilian_Pop_16_and_Over_Construction_Extraction_and_Maintenance_Occupations+
+Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations+
+Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations_Production_Occupations+
+Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations_Transportation_and_Material_Moving_Occupations into one category.
+```{r warning=FALSE}
+
+#Find percentage of people with health insurance at the NYC scale 
+health_ins_dat <- health_ins_dat|>filter(Total_Pop != 0,
+                                         Median_Household_Income_2019 !=0,
+                                         !is.na(Geo_County))
+
+# % with health insurance in total population; % with public health insurance; % with private health insurance
+health_ins_dat<- health_ins_dat|>
+  mutate(perc_with_ins = Total_with_Health_Insurance_Coverage/Total_Pop,
+         perc_with_ins_public = Total_with_Health_Insurance_Coverage_Public_Health_Coverage/Total_Pop,
+         perc_with_ins_private = Total_with_Health_Insurance_Coverage_Private_Health_Insurance/Total_Pop)
+
+#Part I
+#1. Race % establish percentage of population for each race 
+health_ins_dat<- health_ins_dat|>
+  mutate(
+    #Black
+    perc_Pop_Black=Total_Pop_Black_or_African_American_Alone/Total_Pop,
+    #Asian
+    perc_Pop_Asian=Total_Pop_Asian_Alone/Total_Pop,
+    #Hispanic
+    perc_Pop_Hispanic_Latino=Total_Pop_Hispanic_Latino/Total_Pop,
+    #other races
+    perc_Pop_Other_Races=(Total_Pop_Some_Other_Race_Alone+
+                            Total_Pop_Native_Hawaiian_and_Other_Pacific_Islander_Alone+
+                            Total_Pop_American_Indian_and_Alaska_Native_Alone)/Total_Pop,
+    #two or more races 
+    perc_Pop_More_Races=Total_Pop_Two_or_More_Races/Total_Pop,
+    #white
+    perc_White=Total_Pop_White_Alone/Total_Pop,
+    perc_NonWhite=1-perc_White)
+
+#2. Education Attainment % in each census tract
+health_ins_dat<- health_ins_dat|>
+  mutate(perc_less_HS = as.numeric(Pop_25yrs_Less_than_High_School)/Total_Pop,
+         perc_HS = as.numeric(Pop_25yrs_High_School_Graduate_Includes_Equivalency)/Total_Pop,
+         perc_HS_or_Less = perc_less_HS+perc_HS,
+         perc_College= as.numeric(Pop_25yrs_Some_College)/Total_Pop,
+         perc_Bachelor_More = (as.numeric(Pop_25yrs_Bachelor_Degree)+as.numeric(Pop_25yrs_Master_Degree)+
+                                 as.numeric(Pop_25yrs_Professional_School_Degree)+
+                                 as.numeric(Pop_25yrs_Doctorate_Degree))/Total_Pop)
+
+#3. Occupation %: 1. Management Professional 2. Services 3. Sales 3. Farm & Industrial
+# equation: %of labor force in sector over 16yo: sector_employment/Civilian_Pop_in_Labor_Force_16_and_Over
+health_ins_dat<-health_ins_dat|>
+  mutate(perc_Management_Professional =
+           Employed_Civilian_Pop_16_and_Over_Management_Professional_and_Related_Occupations/Civilian_Pop_in_Labor_Force_16_and_Over,
+         perc_Service = 
+           Employed_Civilian_Pop_16_and_Over_Service_Occupations/Civilian_Pop_in_Labor_Force_16_and_Over,
+         perc_Sales = Employed_Civilian_Pop_16_and_Over_Sales_and_Office_Occupations/Civilian_Pop_in_Labor_Force_16_and_Over,
+         perc_Farm_Industrial = (Employed_Civilian_Pop_16_and_Over_Construction_Extraction_and_Maintenance_Occupations+
+                                 Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations+
+                                 Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations_Production_Occupations+
+                                 Employed_Civilian_Pop_16_and_Over_Production_Transportation_and_Material_Moving_Occupations_Transportation_and_Material_Moving_Occupations)/
+                                Civilian_Pop_in_Labor_Force_16_and_Over)
+
+#4. foreign origin population
+health_ins_dat <-health_ins_dat|>
+  mutate(
+    perc_Origin_Native_Born = Origin_Native_Born/Total_Pop,
+    perc_Origin_FO=(Origin_Foreign_Born)/Total_Pop,
+    perc_Origin_FO_Citizen = (Origin_Foreign_Born-Origin_Foreign_Origin_Not_a_Citizen)/Total_Pop,
+    perc_Origin_FO_NCitizen = Origin_Foreign_Origin_Not_a_Citizen/Total_Pop,
+    perc_Poverty = Pop_Poverty/Total_Pop,
+    perc_Non_Poverty = 1-perc_Poverty)
+
+#Part II
+#Children's insurance access % 
+health_ins_dat <-health_ins_dat|>
+  mutate(perc_children_in_school = (Enrolled_In_School_Enrolled_In_Nursery_School_Preschool+
+                                    Enrolled_In_School_Enrolled_In_Kindergarten+                                      
+                                    Enrolled_In_School_Enrolled_In_Grade_1_To_Grade_4+                                                                     Enrolled_In_School_Enrolled_In_Grade_5_To_Grade_8+
+                                    Enrolled_In_School_Enrolled_In_Grade_9_To_Grade_12)/Pop_Under_18,
+         #perc_with_ins = Total_with_Health_Insurance_Coverage/Total_Pop
+         perc_adult_with_ins = (Total_with_Health_Insurance_Coverage-Pop_Under_18_with_Health_Insurance_Coverage)/
+          (Total_Pop-Pop_Under_18),
+         perc_adult_without_ins = 1-perc_adult_with_ins,
+         perc_children_with_ins = Pop_Under_18_with_Health_Insurance_Coverage/Pop_Under_18,
+         perc_children_without_ins = 1-perc_children_with_ins,
+         perc_children_with_ins_public = Pop_Under_18_with_Health_Insurance_Coverage_Public_Health_Coverage/
+           Pop_Under_18,
+         perc_children_with_single_parents = Children_Living_with_Single_Parents/Pop_Under_18,
+         perc_employed_16_over = Civilian_Pop_in_Labor_Force_16_and_Over_Employed/
+           Civilian_Pop_in_Labor_Force_16_and_Over,
+         perc_unemployed_16_over = 1-perc_employed_16_over,
+         perc_male_employed_16_over = Civilian_Male_in_Labor_Force_16_and_Over_Employed/
+           Civilian_Male_in_Labor_Force_16_and_Over,                                                                
+         perc_female_employed_16_over = Civilian_Female_in_Labor_Force_16_and_Over_Employed/Civilian_Female_in_Labor_Force_16_and_Over,
+         )
+
+#Bronx, Queens, Kings, and New York
+Bronx <- health_ins_dat|>
+  filter(Geo_County=="Bronx")
+Queens <- health_ins_dat|>
+  filter(Geo_County=="Queens")
+Kings <- health_ins_dat|>
+  filter(Geo_County=="Kings")
+NewYork <- health_ins_dat|>
+  filter(Geo_County=="New_York")
+#table(health_ins_dat$Geo_County)
+
+#write.csv(health_ins_dat, "Export.csv", row.names=TRUE)
+```
+
+***
+
+## General Summary
+
+First, I would like to create a table to quickly understand what are some general average statistics at Bronx, Queens, Kings, and Manhattan.
+Looking at the overall average statistics for % population with health insurance, % non white population, % population with less than bachelor degree, median household income, % population with occupations other than management professionals (the highest paying occupation category), and % foreign origin population with no citizenship in each county
+
+```{r warning = FALSE}
+#Find the summarized data Race, Education Attainment, Median Household Income, and Occupation about each county 
+health_ins_dat|>
+  group_by(Geo_County)|>
+  summarise(HaveHealthInsurance= percent(round(mean(perc_with_ins),3)),
+            NonWhitePopulation = percent(round(1-mean(perc_White),3)),
+            LessThanBachelorDegree = percent(round(1-mean(perc_Bachelor_More),3)),
+            MedianIncome = round(mean(Median_Household_Income_2019),3),
+            NonManagementProfessional = percent(round(1-mean(perc_Management_Professional),3)),
+            ForeignOriginNotCitizens = percent(round(mean(perc_Origin_FO_NCitizen),3))
+            )
+
+#Plot health insurance access for each county
+health_ins_dat%>%
+  ggplot(aes(y=perc_with_ins, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.8,outlier.fill="grey", outlier.alpha=.2) +
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()+
+  labs(title = "Health Insurance Access for Each County",
+        subtitle = "% of population with health insurance",
+        caption = "Data source: ACS 2015-2019",
+        y = "Percentage% with health insurance", x = "County",
+        tag = "Summary",
+        fill ='County')
+
+#Plot health insurance access for each county - public insurance
+health_ins_dat%>%
+  ggplot(aes(y=perc_with_ins_public, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.8,outlier.fill="grey", outlier.alpha=.2) +
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()+
+  labs(title = "Health Insurance Access for Each County - Public Insurance",
+        subtitle = "% of population with public health insurance",
+        caption = "Data source: ACS 2015-2019",
+        y = "Percentage% with public health insurance", x = "County",
+        tag = "Summary",
+        fill ='County')
+
+
+```
+
+* We can observe from the plot above that 1. New York (Manhattan) has the highest median % of population with health insurance at the census tract level, followed by 2. Kings, 3. Queens, and 4. Bronx.
+* Queens and Kings seem to have more outliers of census tracts that fall out of the interquartile range between Q1 and Q3. 
+
+***
+
+## 1: Race and Health Insurance
+
+#### Data Exploration
+
+Before exploring the race and health insurance correlation, I am exploring the data on racial distribution at each county by plotting Non-white population distribution for each county.
+
+```{r warning = FALSE}
+
+#Plot Non-white population distribution for each county
+health_ins_dat%>%
+  ggplot(aes(y=perc_NonWhite, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.8,outlier.fill="grey", outlier.alpha=.2) +
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()+
+  labs(title = "Non-White Population %",
+        subtitle = "at the census tracts level",
+        caption = "Data source: ACS 2015-2019",
+        y = "Percentage% Non-White Population", x = "County",
+        tag = "Summary",
+        fill ='County')
+```
+* There is an inverse relationship between % non-white population and % of population with health insurance.
+Bronx has the highest median value for non-white population, followed by Queens, Kings, and New York.
+
+***
+
+#### Linear Regression - All Counties
+
+Now, I am probing into the relationship between race and health insurance access through linear regression.
+I am regressing each race in relationship to the white population.
+
+```{r warning = FALSE}
+#Linear regression: Race and Health Insurance Access
+model_race <-lm(perc_with_ins ~ perc_Pop_Black +
+                                perc_Pop_Asian+
+                                perc_Pop_Hispanic_Latino+
+                                perc_Pop_More_Races+
+                                perc_Pop_Other_Races,
+                                #perc_White
+                                data = health_ins_dat)
+summary(model_race)
+
+#Linear regression: Race and Health Insurance Access
+model_race_public <- lm(perc_with_ins_public~
+        perc_Pop_Black +
+        perc_Pop_Asian+
+        perc_Pop_Hispanic_Latino+
+        perc_Pop_More_Races+
+        perc_Pop_Other_Races,
+        data = health_ins_dat)
+
+summary(model_race_public)
+
+```
+
+* The regression above shows % of minority race changes in population in linear relation to % population with health care, comparing to % of white population considering census tract in all four counties. All results are significant at the 99% confidence level. R-squared is 0.3162, explaining 31.62% of the data.
+
+* Y(% population with health care) =  beta1 * white_population_percentage +
+                                    beta2 * black_population_percentage +
+                                    beta3 * asian_population_percentage +
+                                    beta4 * two_or_more_races_population_percentage +
+                                    beta5 * other_races_population_percentage +
+                                    beta6 * hispanic_latino_population_percentage
+                                
+* beta1 * white_population_percentage = 1 - (beta2 * black_population_percentage +
+                                           beta3 * asian_population_percentage +
+                                           beta4 * two_or_more_races_population_percentage +
+                                           beta5 * other_races_population_percentage
+                                           beta6 * hispanic_latino_population_percentage)
+                                           
+* alpha(black_population_percentage) =             beta1-beta2 = -0.041895
+  + negative correlation: 1% increase in black population from white population leads to 0.41% decrease in % population with health insurance
+ 
+* alpha(asian_population_percentage) =             beta1-beta3 = -0.127995
+  + negative correlation: 1% increase in Asian population from white population leads to 0.128% decrease in % population with health insurance
+
+* alpha(hispanic_latino_population_percentage) =   beta1-beta5 = -0.120429
+  + negative correlation: 1% increase in Hispanic or Latino population from white population leads to 0.124% decrease in % population with health insurance
+  
+* alpha(two_or_more_races_population_percentage) = beta1-beta4 = 0.069670 (not significant)
+
+* alpha(other_races_population_percentage) =       beta1-beta6 = -0.023254 (not significant)
+
+***
+
+#### Linear Regression - Each County Separately
+
+```{r warning = FALSE}
+
+#linear model for each county - insurance
+model_ins_race_by_County <- health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins ~  perc_Pop_Black +
+                              perc_Pop_Asian+
+                              perc_Pop_Hispanic_Latino+
+                              perc_Pop_More_Races+
+                              perc_Pop_Other_Races,
+                              #perc_White
+                              data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"))|>
+  rename('race'='term')
+
+model_ins_race_by_County
+```
+* __Significant data to notice:__
+  + In Kings and New York, 1% increase of Hispanic and Latino from white population leads to around 0.12% and 0.10% decrease in % population with health insurance
+  + In Queens, 1% increase of Hispanic and Latino from white population leads to around 0.22% decrease in % population with health insurance; 1% increase of Asian from white population leads to around 0.16% decrease in % population with health insurance
+* Thoughts: It looks like Kings, New York, and Queens county should look at improving insurance access for Latino or Hispanic population, and Queens needs to pay attention to Asian population as well
+
+* __Looking at the correlation at county level, health insurance access is NOT statistically significant to race:__
+  + any race categories except for "Hispanic or Latino" in Bronx
+  + people with " two or more races" or "other races" in Kings and New York
+  + "other races" in Queens 
+ 
+***
+
+#### Plot % Black, Asian, Hispanic/Latino, and White population in linear relationship to % population with health care
+
+```{r warning = FALSE}
+
+#####Black Population#####
+
+# % Black population and health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins, x=perc_Pop_Black, na.rm=TRUE)) +
+  geom_point(col = "blue", size = .8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  labs(y="Population with Health Insurance",
+       x= "% of population: black alone",
+       title = "% black population and health insurance access")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+# % Black population and public health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins_public, x=perc_Pop_Black, na.rm=TRUE)) +
+  geom_point(col = "blue", size = .8, alpha = .2)+
+  facet_wrap(~Geo_County)+
+  labs(y="Population with Health Insurance",
+       x= "% of population: black alone",
+       title = "% black population and health insurance access")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+#regression - insured
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins ~ perc_Pop_Black, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+
+#regression - public insurance
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins_public ~ perc_Pop_Black, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+```
+* For insurance: Black population is negatively correlated with % of population with insurance in New York, and positively correlated in Queens, at the 95% significant level.
+* For public insurance: Black population is positively correlated with % of population public insurance in New York ONLY, at the 95% significant level.
+
+```{r warning = FALSE}
+#####Asian Population#####
+
+
+# % Asian population and health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins, x=perc_Pop_Asian)) +
+  geom_point(col = "red", size = 0.8, alpha = 1/5)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population: Asian") +
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+
+# % Asian population and public health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins_public, x=perc_Pop_Asian)) +
+  geom_point(col = "red", size = 0.8, alpha = 1/5)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population: Asian") +
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+#regression - public insurance
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins_public ~ perc_Pop_Asian, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+
+```
+* Asian population is positively correlated with % of population public insurance in Kings and Queens, yet negatively correlated with % of population public insurance in Bronx and New York.
+
+```{r warning = FALSE}
+#####Hispanic Latino Population#####
+
+
+# % Hispanic Latino population and health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins, x=perc_Pop_Hispanic_Latino)) +
+  geom_point(col = "purple", size = 0.8, alpha = 1/5)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population:Hispanic or Latino") +
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+
+# % Hispanic Latino population and public health insurance access
+health_ins_dat %>%
+  ggplot(aes(y=perc_with_ins_public, x=perc_Pop_Hispanic_Latino)) +
+  geom_point(col = "purple", size = 0.8, alpha = 1/5)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population: Hispanic or Latino") +
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=.5, label.y=.1)+
+  theme_minimal()
+
+
+#regression - insured 
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins ~ perc_Pop_Hispanic_Latino, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+
+#regression - insured with public insurance
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins_public ~ perc_Pop_Hispanic_Latino, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+
+```
+
+* Hispanic and Latino population is positively correlated with % of population public insurance.
+The highest correlation is at Bronx, then New York, Queens, and Kings.
+
+```{r warning = FALSE}
+#####White Population#####
+
+# % White population and health insurance access
+health_ins_dat %>%
+  ggplot(aes(x=perc_White, y=perc_with_ins)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population: white alone") +
+  geom_smooth(method = lm)+
+  theme_minimal()+
+  stat_regline_equation(label.x=.1, label.y=.1)
+
+# % White population and public health insurance access
+health_ins_dat %>%
+  ggplot(aes(x=perc_White, y=perc_with_ins_public, color=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  ylab("Population with Health Insurance")+
+  xlab("% of population: white alone") +
+  geom_smooth(method = lm)+
+  theme_minimal()+
+  stat_regline_equation(label.x=.1, label.y=.1)+
+  scale_color_brewer(palette = "RdBu")
+
+#regression
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins_public ~ perc_White, data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('race'='term')
+```
+* white population is negatively correlated with % of population public insurance.
+
+***
+
+## 2: Median Household Income and Health Insurance Access
+
+#### Data Exploration
+```{r warning = FALSE}
+
+#median income distribution per count per census tract
+health_ins_dat_MedianHouseholdIncome <- health_ins_dat%>%
+  filter(Households>0)
+
+health_ins_dat_MedianHouseholdIncome%>%
+  ggplot(aes(x=Median_Household_Income_2019, fill=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_histogram(bins=60)+
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()
+
+#identify the outliers / super rich census tracts
+health_ins_dat_MedianHouseholdIncome|>
+  filter(Median_Household_Income_2019>250000)|>
+  select(Geo_County,Geo_QName,perc_White, Per_Capita_Income)
+
+```
+#### Linear Regression
+```{r warning = FALSE}
+#Linear regression: Median Household Income and Health Insurance Access
+
+model_householdIncome <-
+  lm(perc_with_ins~log(Median_Household_Income_2019),data = health_ins_dat_MedianHouseholdIncome)
+
+summary(model_householdIncome)
+
+
+#function to explore each county
+lm_income <-function(data){
+  fit <- lm(perc_with_ins~Median_Household_Income_2019, data=data)
+  sum.fit <- summary(fit)
+  
+  data.frame(slope=sum.fit$coefficients[2,"Estimate"],
+             se = sum.fit$coefficients[2, "Std. Error"],
+             p_value = sum.fit$coefficients[2, "Pr(>|t|)"])
+}
+
+health_ins_dat_MedianHouseholdIncome|>
+  group_by(Geo_County)|>
+  do(lm_income(.))
+```
+#### Plot
+```{r warning=FALSE}
+#Scatterplot to demonstrate how median income correlates with health insurance access in each county
+health_ins_dat_MedianHouseholdIncome%>%
+  ggplot(aes(x=log(Median_Household_Income_2019), y=perc_with_ins, col=Geo_County, size = Total_Pop ))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation( label.y=.5)+
+  theme_minimal()
+
+#Scatterplot to demonstrate how median income correlates with public health insurance access in each county
+health_ins_dat_MedianHouseholdIncome%>%
+  ggplot(aes(x=log(Median_Household_Income_2019), y=perc_with_ins_public, col=Geo_County, size = Total_Pop ))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation( label.y=.05)+
+  theme_minimal()
+```
+
+***
+
+## 3: Education Attainment of population over 25 years old 
+
+#### Data Exploration
+
+```{r warning = FALSE}
+health_ins_dat_Education<-health_ins_dat%>%
+  pivot_longer(cols = perc_less_HS:perc_Bachelor_More & !perc_HS_or_Less, 
+               #grep("Pop_25yrs_", names(health_ins_dat), value=TRUE)
+               names_to = "Education_Attainment",
+               values_to = "Percent_Pop")%>%
+  select(c("Geo_County","Education_Attainment", "Percent_Pop", "Total_Pop"))
+
+health_ins_dat_Education|>
+  group_by(Geo_County)|>
+  ggplot(aes(x=Education_Attainment,y=Percent_Pop, fill=Education_Attainment)) +
+  facet_wrap(~Geo_County,nrow=4)+
+  scale_fill_brewer(palette = "Set3")+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  theme_minimal()+
+  coord_flip()
+  #scale_x_discrete(guide = guide_axis(angle = 90))
+  #theme(axis.text.x=element_text(angle=90, hjust=1))
+
+```
+
+#### Linear Regression
+```{r warning = FALSE}
+#edu and health insurance
+model_edu_attain <- lm(perc_with_ins~
+                       perc_less_HS+
+                       perc_HS+
+                       perc_College,
+                       #perc_Bachelor_More,
+                       data = health_ins_dat)
+summary(model_edu_attain)
+
+
+#linear model for each county
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(tidy(lm(perc_with_ins ~
+                       perc_less_HS+
+                       perc_HS+
+                       perc_College,
+                       #perc_Bachelor_More,
+                      data = .)))|>
+  select(-statistic)|>
+  mutate(`significant?` = case_when(
+    `p.value` < 0.05 ~ "yes",
+    TRUE ~ "no"
+  ))|>
+  rename('education attainment'='term')
+
+```
+```{r}
+#edu and household income
+model_edu_and_householdIncome <- lm(log(Median_Household_Income_2019)~
+                                      perc_less_HS+
+                                      perc_HS+
+                                      perc_College,
+                                      #perc_Bachelor_More,
+                                      data = health_ins_dat)
+summary(model_edu_and_householdIncome)
+```
+
+#### Plot
+```{r warning = FALSE}
+
+#scatterplot to demonstrate how education attainment of high school diploma or less (people over 25 years old) correlates with health insurance access in each county
+health_ins_dat%>%
+  ggplot(aes(x=perc_HS_or_Less, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+#scatterplot to demonstrate how education attainment of bachelor degree or more (people over 25 years old) correlates with health insurance access in each county
+health_ins_dat%>%
+  ggplot(aes(x=perc_Bachelor_More, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+#scatterplot to demonstrate how education attainment of bachelor degree or more (people over 25 years old) correlates with public health insurance access in each county
+health_ins_dat%>%
+  ggplot(aes(x=perc_Bachelor_More, y=perc_with_ins_public, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.05)+
+  theme_minimal()
+```
+
+## 4: Employment Sectors
+
+$                                                                                                               <dbl> …
+$ perc_Service                                                                                                                               <dbl> …
+$ perc_Sales                                                                                                                                 <dbl> …
+$   
+
+#### Data Exploration
+```{r warning = FALSE}
+health_ins_dat_Employment<-health_ins_dat%>%
+  pivot_longer(cols = perc_Management_Professional:perc_Farm_Industrial, 
+               names_to = "Employment_Sector",
+               values_to = "Employment_Pop")%>%
+  select(c("Geo_County","Employment_Sector", "Employment_Pop", "Total_Pop"))
+
+health_ins_dat_Employment|>
+  group_by(Geo_County)|>
+  ggplot(aes(x=Employment_Sector,y=Employment_Pop, fill=Employment_Sector)) +
+  facet_wrap(~Geo_County,nrow=4)+
+  scale_fill_brewer(palette = "Set2")+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  theme_minimal()+
+  coord_flip()
+  #scale_x_discrete(guide = guide_axis(angle = 90))
+  #theme(axis.text.x=element_text(angle=90, hjust=1))
+
+```
+
+#### Linear Regression
+```{r warning = FALSE}
+
+
+model_employment <- lm(perc_with_ins~perc_Farm_Industrial+
+                                   perc_Service+
+                                   perc_Sales,
+                                   data = health_ins_dat)
+summary(model_employment)
+
+#Impact of employment status and health insurance overage
+lm_employment <-function(data){
+  fit <- lm(perc_with_ins~perc_employed_16_over, data=data)
+  sum.fit <- summary(fit)
+  
+  data.frame(slope=sum.fit$coefficients[2,"Estimate"],
+             se = sum.fit$coefficients[2, "Std. Error"],
+             p_value = sum.fit$coefficients[2, "Pr(>|t|)"])
+}
+
+health_ins_dat|>
+  group_by(Geo_County)|>
+  do(lm_employment(.))
+
+```
+
+#### Plot
+```{r warning = FALSE}
+
+#scatterplot to demonstrate how employment section (people over 16 years old) correlates with health insurance access in each county
+
+###Farm & Industrial###
+health_ins_dat%>%
+  ggplot(aes(x=perc_Farm_Industrial, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+###Service###
+health_ins_dat%>%
+  ggplot(aes(x=perc_Service, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+###Sales###
+health_ins_dat%>%
+  ggplot(aes(x=perc_Sales, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+###Management_Professional###
+health_ins_dat%>%
+  ggplot(aes(x=perc_Management_Professional, y=perc_with_ins, col=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+```
+
+## 5: Foreign Origin Population
+
+#### Data Exploration
+
+```{r warning = FALSE}
+
+#distribution of Foreign Origin Population with Citizenship
+health_ins_dat|>
+  ggplot(aes(x = Geo_County, y = perc_Origin_FO_Citizen, fill = Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()
+
+#distribution of Foreign Origin Population with NO Citizenship
+health_ins_dat|>
+  ggplot(aes(x = Geo_County, y = perc_Origin_FO_NCitizen, fill = Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()
+
+```
+
+#### Linear Regression 
+
+###### Foreign Origin Population with Citizenship
+
+```{r warning = FALSE}
+
+# Foreign Origin - US Citizen
+model_foreign_citizen <- lm(perc_with_ins~perc_Origin_FO_Citizen, data=health_ins_dat)
+summary(model_foreign_citizen)
+
+# with citizenship
+health_ins_dat%>%
+  ggplot(aes(x=perc_Origin_FO_Citizen, y=perc_with_ins, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+##publicly insured?
+summary(lm(perc_with_ins_public~perc_Origin_FO_Citizen, data=health_ins_dat))
+
+# with citizenship - public insurance
+health_ins_dat%>%
+  ggplot(aes(x=perc_Origin_FO_Citizen, y=perc_with_ins_public, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.9)+
+  theme_minimal()
+
+```
+
+##### Foreign Origin - NOT US Citizen
+
+```{r}
+
+# Foreign Origin - NOT US Citizen
+summary(lm(perc_with_ins~perc_Origin_FO_NCitizen, data=health_ins_dat))
+
+# without citizenship
+health_ins_dat%>%
+  ggplot(aes(x=perc_Origin_FO_NCitizen, y=perc_with_ins, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+
+##publicly insured?
+summary(lm(perc_with_ins_public~perc_Origin_FO_NCitizen, data=health_ins_dat))
+
+# without citizenship - public insurance
+health_ins_dat%>%
+  ggplot(aes(x=perc_Origin_FO_NCitizen, y=perc_with_ins_public, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.99)+
+  theme_minimal()
+
+```
+* More foreign origin and not citizen lead to more higher decrease in % population with health insurance coverage, and a much higher increase in % population with public health insurance coverage, comparing to foreign origin with citizenship.
+  + 1 % population increase in foreign origin and not citizen is correlated with -0.367429% decrease in % population with health insurance coverage, and, 0.387096% increase in population publicly insured.
+
+## 6. Poverty 
+
+* Ho1: % population in poverty is not correlated with % of children covered in health insurance 
+* Ha1: % population in poverty is correlated with % of children covered in health insurance 
+
+* Ho2: % population in poverty is not correlated with % of children covered in public health insurance 
+* Ha2: % population in poverty is correlated with % of children covered in public health insurance 
+
+#### Data Exploration
+```{r}
+#distribution of Foreign Origin Population with Citizenship
+health_ins_dat|>
+  ggplot(aes(x = Geo_County, y = perc_Poverty, fill = Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "RdBu")+
+  theme_minimal()
+```
+
+
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs poverty 
+model_ins_poverty <- lm(perc_with_ins~
+        perc_Poverty,
+        data = health_ins_dat)
+
+summary(model_ins_poverty)
+
+# plot
+health_ins_dat%>%
+  ggplot(aes(x=perc_Poverty, y=perc_with_ins, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.5)+
+  theme_minimal()
+
+#public insurance
+model_ins_poverty_public <- lm(perc_with_ins_public~
+        perc_Poverty,
+        data = health_ins_dat)
+
+summary(model_ins_poverty_public)
+
+# plot
+health_ins_dat%>%
+  ggplot(aes(x=perc_Poverty, y=perc_with_ins_public, color=Geo_County))+
+  facet_wrap(~Geo_County)+
+  geom_point(size = 0.8, alpha=.2)+
+  scale_color_brewer(palette = "RdBu")+
+  geom_smooth(method = lm)+
+  stat_regline_equation(label.x=0, label.y=.0)+
+  theme_minimal()
+
+```
+* We reject Ho1 at 95% significance level, % population in poverty is correlated to % of population covered with health insurance
+  + 1% increase in % population in poverty leads to 0.39 % increase of % of population covered with health insurance. R-squared:  0.02104 
+  
+* We reject Ho2 at 95% significance level, % population in poverty is correlated to % of population covered with public health insurance
+  + 1% increase in % population in poverty leads to 0.17 % increase of % of population covered with health insurance. R-squared:  0.007233 
+
+## Multivariate Linear Regression
+
+Goal: In this part of the study, I am building a model to analyze if the race factor is controlled, factors that positively correlated with health insurance access, including education attainment, employment sector, median household income, and native born citizens, will make the population more likely to obtain health insurance.
+
+#### Linear Model for Each Factor 
+```{r warning = FALSE}
+
+###regression model for each categories
+#first variable: race
+
+tidy(summary(model_race))
+
+#second variable: education (bachelor or higher degree)
+model_minority_edu <-lm(perc_with_ins ~
+                        perc_Bachelor_More,
+                        data = health_ins_dat)
+tidy(summary(model_minority_edu))
+
+
+#third variable: employment sector
+model_minority_employment <-lm(perc_with_ins ~
+                            perc_Management_Professional+
+                            perc_Sales,
+                        data = health_ins_dat)
+tidy(summary(model_minority_employment))
+
+#fourth variable: median household income
+tidy(summary(model_householdIncome))
+
+#fifth variable: foreign origin with citizenship
+model_minority_citizen <-lm(perc_with_ins ~
+                        perc_Origin_Native_Born,
+                        data = health_ins_dat)
+tidy(summary(model_minority_citizen))
+
+```
+
+#### All variables combining together
+
+```{r warning = FALSE}
+
+# race 
+
+model_m_p <-lm(perc_with_ins_public ~
+                        perc_Pop_Black +
+                        perc_Pop_Asian+
+                        perc_Pop_Hispanic_Latino+
+                        perc_Pop_More_Races+
+                        perc_Pop_Other_Races,
+                        data = health_ins_dat)
+
+# race and median household income 
+model_m2 <-lm(perc_with_ins ~
+                        perc_Pop_Black +
+                        perc_Pop_Asian+
+                        perc_Pop_Hispanic_Latino+
+                        perc_Pop_More_Races+
+                        perc_Pop_Other_Races+
+                        log(Median_Household_Income_2019),
+                        data = health_ins_dat)
+tidy(summary(model_m2))
+
+model_m2_p <-lm(perc_with_ins_public ~
+                        perc_Pop_Black +
+                        perc_Pop_Asian+
+                        perc_Pop_Hispanic_Latino+
+                        perc_Pop_More_Races+
+                        perc_Pop_Other_Races+
+                        log(Median_Household_Income_2019),
+                        data = health_ins_dat)
+
+# race and median household income and education attainment(bachelor degree or more) 
+model_m3 <-lm(perc_with_ins ~
+                      perc_Pop_Black +
+                      perc_Pop_Asian+
+                      perc_Pop_Hispanic_Latino+
+                      perc_Pop_More_Races+
+                      perc_Pop_Other_Races+
+                      log(Median_Household_Income_2019)+
+                      perc_Bachelor_More,
+                      data = health_ins_dat)
+tidy(summary(model_m3))
+
+model_m3_p <-lm(perc_with_ins_public ~
+                      perc_Pop_Black +
+                      perc_Pop_Asian+
+                      perc_Pop_Hispanic_Latino+
+                      perc_Pop_More_Races+
+                      perc_Pop_Other_Races+
+                      log(Median_Household_Income_2019)+
+                      perc_Bachelor_More,
+                      data = health_ins_dat)
+
+# race and median household income and education attainment(bachelor degree or more)  and employment sectors
+model_m4 <-lm(perc_with_ins ~
+                     perc_Pop_Black +
+                     perc_Pop_Asian+
+                     perc_Pop_Hispanic_Latino+
+                     perc_Pop_More_Races+
+                     perc_Pop_Other_Races+
+                     log(Median_Household_Income_2019)+
+                     perc_Bachelor_More+
+                     perc_Management_Professional+
+                     perc_Sales,
+                     data = health_ins_dat)
+tidy(summary(model_m4))
+
+```
+
+Observation:
+In model_minority4, after adding the profession, we can observe that. 
+There is multicollinearity between management professional and education level, and, management professional and race.
+
+```{r warning = FALSE}
+#% employment sector
+
+#linear regression between bachelor degree or more with management profession and sales 
+tidy(summary(lm(perc_Bachelor_More~perc_Management_Professional+perc_Sales, data=health_ins_dat)))
+
+#linear regression between median household income (log transformed) with management profession and sales
+tidy(summary(lm(log(Median_Household_Income_2019)~perc_Management_Professional+perc_Sales, data=health_ins_dat)))
+```
+
+
+```{r warning = FALSE}
+
+## race and median household income and education attainment(bachelor degree or more) and % population in poverty
+model_m5 <-lm(perc_with_ins ~
+                     perc_Pop_Black +
+                     perc_Pop_Asian+
+                     perc_Pop_Hispanic_Latino+
+                     perc_Pop_More_Races+
+                     perc_Pop_Other_Races+
+                     log(Median_Household_Income_2019)+
+                     perc_Bachelor_More+
+                     perc_Poverty,
+                     #perc_Management_Professional+
+                     #perc_Sales,
+                     data = health_ins_dat)
+tidy(summary(model_m5))
+
+model_m5_p <-lm(perc_with_ins_public ~
+                     perc_Pop_Black +
+                     perc_Pop_Asian+
+                     perc_Pop_Hispanic_Latino+
+                     perc_Pop_More_Races+
+                     perc_Pop_Other_Races+
+                     log(Median_Household_Income_2019)+
+                     perc_Bachelor_More+
+                     perc_Poverty,
+                     #perc_Management_Professional+
+                     #perc_Sales,
+                     data = health_ins_dat)
+```
+
+
+```{r warning = FALSE}
+
+## race and median household income and education attainment(bachelor degree or more) and % population in poverty and % population with US citizenship
+model_m6 <-lm(perc_with_ins ~
+                     perc_Pop_Black +
+                     perc_Pop_Asian+
+                     perc_Pop_Hispanic_Latino+
+                     perc_Pop_More_Races+
+                     perc_Pop_Other_Races+
+                     log(Median_Household_Income_2019)+
+                     perc_Bachelor_More+
+                     #perc_Poverty+
+                     #perc_Management_Professional+
+                     #perc_Sales,
+                     perc_Origin_Native_Born,
+                     #perc_Origin_FO_Citizen,
+                     data = health_ins_dat)
+tidy(summary(model_m6))
+
+model_m6_p <-lm(perc_with_ins_public ~
+                     perc_Pop_Black +
+                     perc_Pop_Asian+
+                     perc_Pop_Hispanic_Latino+
+                     perc_Pop_More_Races+
+                     perc_Pop_Other_Races+
+                     log(Median_Household_Income_2019)+
+                     perc_Bachelor_More+
+                     #perc_Poverty+
+                     #perc_Management_Professional+
+                     #perc_Sales,
+                     perc_Origin_Native_Born,
+                     #perc_Origin_FO_NCitizen,
+                     data = health_ins_dat)
+```
+
+```{r warning = FALSE}
+#create a combined regression table_ insurance
+stargazer(model_race, model_m2, model_m3, model_m6,
+          single.row=TRUE,type="text")
+
+#create a combined regression table_ public insurance
+stargazer(model_m_p, model_m2_p, model_m3_p,model_m6_p,
+          single.row=TRUE,type="text")
+```
+#### PART I CONCLUSION
+* As we can see in the table above that investigate % popualtion with insurance, when we have race as the base independent variable, and add more explanatory independent variables, the impact of race on a person's likelihood to enroll in healthcare plan decreases. 
+* Employment sectors and median household income is highly correlated at 0.8, thus I excluded the employment sectors in the linear model.
+* Finding in the final multivariate regression:
+  + % Asian population's correlation coefficient  % population without health insurance is 4.4 times higher than % black population;
+  + % Hispanic or Latino's correlation coefficient with  % population without health insurance is twice as much as the coefficient of % Asian population
+  + more native born population lead to more people with health insurance 
+  + bachelor or high education degree does not correlated at the 95% significance level 
+* Citizenship has a strong influence on a person's likelihood to enroll in healthcare plan 
+  + Foreign origin population is less likely to have healthcare plan, and foreign origin population without citizenship is much less likely.
+  + More foreign origin and not citizen lead to more higher decrease in % population with health insurance coverage, and a much higher increase in % population with public health insurance coverage, comparing to foreign origin with citizenship.
+  + % population in poverty is positively correlated with % population with health insurance 
+* Although we can look at the four counties together, the variables play very different role when analyzing each county separately.
+
+***
+
+# Part II: Children's health insurance access
+
+This part of the study investigates the correlations between children's (under 18) access to health coverage and social-economic factors in NYC Bronx, Queens, Kings, and Manhattan at the census tract level. 
+
+*Unable to access health insurance may be positively related to lower household income/poverty, minority races, school enrollment, employment status (if parents are employed), and citizenship status for the foreign origin population. The study also look into those factor's correlations with public insurance.
+
+
+*Research into high school enrollment in relationship to:
+
+  + Healthcare_coverage for children under 18 (y)  = constant + correlation_coefficient * % school enrollment + correlation_coefficient * %single parents + correlation_coefficient * %employed + correlation_coefficient * %foreign origin non citizens
+
+  + Ho: healthcare coverage is not related to poverty status / single parenting / employment status / foreign origin non citizens
+
+  + Ha: healthcare coverage is related to poverty status / single parenting / employment status / foreign origin non citizens
+
+
+## General Summary
+
+```{r warning = FALSE}
+
+# children with health insurance in each county
+health_ins_dat|>
+  ggplot(aes(x = Geo_County, y = perc_children_with_ins, fill = Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()+
+  labs(title = "Children's Health Insurance Access for Each County",
+      subtitle = "% of children under 18 with health insurance",
+      caption = "Data source: ACS 2015-2019",
+      y = "Percentage% children with health insurance", x = "County",
+      tag = "Summary",
+      fill ='County')
+```
+
+* Comparing to the total population, children have much higher % covered with health insurance.
+New York county is still the top out of all.
+
+```{r warning = FALSE}
+#public insurance 
+health_ins_dat|>
+  ggplot(aes(x = Geo_County, y = perc_children_with_ins_public, fill = Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()+
+  labs(title = "Children's Health Insurance Access for Each County - Public Insurance",
+    subtitle = "% of children under 18 with public health insurance",
+    caption = "Data source: ACS 2015-2019",
+    y = "Percentage% children with public health insurance", x = "County",
+    tag = "Summary",
+    fill ='County')
+
+```
+
+* Bronx census tracts on average have the most % of children covered with public insurance while New York census tracts have the largest range and lowest median value for % of children covered with public insurance
+
+
+```{r warning = FALSE}
+
+#Is children having insurance correlated with adult with insurance?
+#children with insurance vs adult population with insurance 
+summary(lm(perc_children_with_ins~perc_adult_with_ins, data=health_ins_dat))
+#public insurance - adult without insurance
+summary(lm(perc_children_with_ins_public~perc_adult_without_ins, data=health_ins_dat))
+
+```
+
+
+* There is high correlation between % adult without insurance and  % of children covered in public insurance
+
+  + 1% increase in % adult with insurance lead to 0.11% increase of % of children covered in public insurance. R-squared:  0.04698
+
+  + 1% increase in % adult without insurance leads to 1.6% increase of % of children covered in public insurance. R-squared:  0.1867. 
+  
+***
+
+## 1. School Enrollment
+
+* Ho1: % children enrolled in school is not correlated with % of children covered in health insurance 
+* Ha1: % children enrolled in school is correlated with % of children covered in health insurance 
+
+* Ho2: % children enrolled in school is not correlated with % of children covered in public health insurance 
+* Ha2: % children enrolled in school is correlated with % of children covered in public health insurance 
+
+#### Data Exploration
+```{r}
+health_ins_dat|>
+  ggplot(aes(x=Geo_County, y=perc_children_in_school, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()
+```
+
+#### Linear Regression
+
+```{r warning = FALSE}
+
+# health insurance enrollment rate children under 18 vs school enrollment
+model_child_with_ins_school_enrollment <- lm(perc_children_with_ins ~
+        perc_children_in_school,
+        data = health_ins_dat)
+summary(model_child_with_ins_school_enrollment)
+
+#public insurance insurance 
+model_child_with_ins_school_enrollment_public <- lm(perc_children_with_ins_public ~
+        perc_children_in_school,
+        data = health_ins_dat)
+summary(model_child_with_ins_school_enrollment_public)
+
+```
+
+* We fail to reject Ho1 at 95% significance level, children enrolled in school is not  correlated to  % of children covered in health insurance
+* We reject Ho2 at 95% significance level, children enrolled in school is  correlated to % of children covered in public health insurance
+  + 1% increase in children enrolled in school leads to 0.39 % increase of % of children covered in public insurance. R-squared:  0.02946 
+
+#### Plot
+
+```{r warning = FALSE}
+#insurance
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins,x=perc_children_in_school, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=.7)+
+  theme_minimal()
+
+#public insurance
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins_public,x=perc_children_in_school, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=-.4)+
+  theme_minimal()
+
+```
+
+*** 
+
+## 2. Employment / Unemployment (age over 16)
+
+* Ho1: % adult employed is not correlated with % of children covered in health insurance 
+* Ha1: % adult employed is correlated with % of children covered in health insurance 
+
+* Ho2: % adult unemployed is not correlated with % of children covered in public health insurance 
+* Ha2: % adult unemployed in school is correlated with % of children covered in public health insurance 
+
+#### Data Exploration
+```{r}
+health_ins_dat|>
+  ggplot(aes(x=Geo_County, y=perc_unemployed_16_over, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()
+```
+
+
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs % of population over 16 employed
+model_child_with_ins_employ <- lm(perc_children_with_ins~
+        perc_employed_16_over,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_employ)
+
+#public insurance
+model_child_with_ins_employ_public <- lm(perc_children_with_ins_public~
+        perc_unemployed_16_over,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_employ_public)
+
+```
+
+* We fail to reject Ho1 at 95% significance level, % adult employed is not  correlated to  % of children covered in health insurance
+* We reject Ho2 at 95% significance level, % adult unemployed is  correlated to % of children covered in public health insurance
+  + 1% increase adult unemployed leads to 2.5 % increase of % of children covered in public insurance. R-squared: 0.1788 
+
+#### Plot
+
+```{r warning = FALSE}
+
+# plot
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins,x=perc_unemployed_16_over, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation()+
+  theme_minimal()
+
+# plot
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins_public,x=perc_unemployed_16_over, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=-.4)+
+  theme_minimal()
+
+```
+
+***
+
+## 3. Single Parents
+
+* Ho1: % single parents is not correlated with % of children covered in health insurance 
+* Ha1: % single parents is correlated with % of children covered in health insurance 
+
+* Ho2: % single parents is not correlated with % of children covered in public health insurance 
+* Ha2: % single parents is correlated with % of children covered in public health insurance 
+
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs percentage of children with single parents 
+model_child_with_ins_single_parent <- lm(perc_children_with_ins~
+        perc_children_with_single_parents,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_single_parent)
+
+# public - not significant
+model_child_with_ins_single_parent_public <- lm(perc_children_with_ins~
+        perc_children_with_single_parents,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_single_parent_public)
+```
+
+* We fail to reject Ho1 and Ho2 at 95% significance level, % single parents is not  correlated to % of children covered in health insurance or public health insurance.
+
+***
+
+## 4. Median Household Income
+
+* Ho1: % single parents is not correlated with % of children covered in health insurance 
+* Ha1: % single parents is correlated with % of children covered in health insurance 
+
+* Ho2: % single parents is not correlated with % of children covered in public health insurance 
+* Ha2: % single parents is correlated with % of children covered in public health insurance 
+
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs median household income
+model_child_with_ins_income <- lm(perc_children_with_ins~
+        log(Median_Household_Income_2019),
+        data = health_ins_dat)
+
+summary(model_child_with_ins_income)
+
+#public insurance
+model_child_with_ins_income_public <- lm(perc_children_with_ins_public~
+        log(Median_Household_Income_2019),
+        data = health_ins_dat)
+
+summary(model_child_with_ins_income_public)
+
+```
+
+* We reject Ho1 at 95% significance level, median household income is positively correlated to % of children covered in health insurance
+  + 10% increase in median household income leads to 0.03894 % increase of % of children covered in public insurance. R-squared: 0.003221 
+
+* We reject Ho2 at 95% significance level, median household income is negatively correlated to % of children covered in public health insurance
+  + 10% increase in median household income leads to -3.95 % decrease of % of children covered in public insurance. R-squared: 0.681 
+
+#### Plot
+
+```{r warning = FALSE}
+# plot
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins,x=log(Median_Household_Income_2019), col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=.7)+
+  theme_minimal()
+
+# plot
+health_ins_dat|>
+  ggplot(aes(y=perc_children_with_ins_public,x=log(Median_Household_Income_2019), col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=-.4)+
+  theme_minimal()
+
+```
+
+***
+
+## 5. Race
+
+* Ho1: Race is not correlated with % of children covered in health insurance 
+* Ha1: Race is correlated with % of children covered in health insurance 
+
+* Ho2: Race is not correlated with % of children covered in public health insurance 
+* Ha2: Race is correlated with % of children covered in public health insurance 
+
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs percentage population non-white 
+model_child_with_ins_race <- lm(perc_children_with_ins~
+        perc_Pop_Black +
+        perc_Pop_Hispanic_Latino +
+        perc_Pop_Asian+
+        perc_Pop_More_Races+
+        perc_Pop_Other_Races,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_race)
+```
+
+* We reject Ho1 at 95% significance level, % Black, Hispanic or Latino, Asian population are negatively correlated to % of children covered in health insurance
+  + 1% increase in Black population comparing to white population leads to -0.012016 % decrease of % of children covered in public insurance. 
+  + 1% increase in Hispanic or Latino population comparing to white population leads to -0.008109 % decrease of % of children covered in public insurance. 
+  + 1% increase in Asian population comparing to white population leads to -0.046934 % decrease of % of children covered in public insurance. 
+  + population with two or more races or other races* are not correlated to % of children covered in health insurance at 95% significance level
+  + R-squared: 0.03555 
+
+```{r warning = FALSE}
+
+#public insurance
+model_child_with_ins_race_public <- lm(perc_children_with_ins_public~
+        perc_Pop_Black +
+        perc_Pop_Hispanic_Latino +
+        perc_Pop_Asian+
+        perc_Pop_More_Races+
+        perc_Pop_Other_Races,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_race_public)
+```
+  
+* We reject Ho2 at 95% significance level, % Black, Hispanic or Latino, Asian population are positively correlated to % of children covered in public health insurance; population with two or more races is negatively correlated.
+  + 1% increase in Black population comparing to white population leads to 0.32929 % increase of % of children covered in public insurance. 
+  + 1% increase in Hispanic or Latino population comparing to white population leads to 0.75512 % increase of % of children covered in public insurance. 
+  + 1% increase in Asian population comparing to white population leads to 0.36933 % increase of % of children covered in public insurance. 
+  + 1% increase in population with two or more races comparing to white population leads to -0.44778 % decrease of % of children covered in public insurance. 
+  + population with other races* are not correlated to % of children covered in health insurance at 95% significance level
+  + R-squared: 0.4232 
+
+#### Plot
+
+```{r warning = FALSE}
+##### children with insurance 
+# black
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Black,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=0.7)+
+  theme_minimal()
+
+# asian
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Asian,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=0.7)+
+  theme_minimal()
+
+# H L
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Hispanic_Latino,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=0.7)+
+  theme_minimal()
+
+# white
+health_ins_dat|>
+  ggplot(aes(x=perc_White,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=0.7)+
+  theme_minimal()
+
+
+```
+```{r}
+##### children with insurance 
+# black
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Black,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=1)+
+  theme_minimal()
+
+# asian
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Asian,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=1)+
+  theme_minimal()
+
+# H L
+health_ins_dat|>
+  ggplot(aes(x=perc_Pop_Hispanic_Latino,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=1)+
+  theme_minimal()
+
+# white
+health_ins_dat|>
+  ggplot(aes(x=perc_White,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=1)+
+  theme_minimal()
+
+```
+
+***
+
+## 6. Poverty 
+
+* Ho1: % population in poverty is not correlated with % of children covered in health insurance 
+* Ha1: % population in poverty is correlated with % of children covered in health insurance 
+
+* Ho2: % population in poverty is not correlated with % of children covered in public health insurance 
+* Ha2: % population in poverty is correlated with % of children covered in public health insurance 
+
+#### Data Exploration
+```{r}
+health_ins_dat|>
+  ggplot(aes(x=Geo_County, y=perc_Poverty, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()
+```
+#### Linear Regression
+
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs poverty 
+model_child_with_ins_poverty <- lm(perc_children_with_ins~
+        perc_Poverty,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_poverty)
+
+#public insurance
+model_child_with_ins_poverty_public <- lm(perc_children_with_ins_public~
+        perc_Poverty,
+        data = health_ins_dat)
+
+summary(model_child_with_ins_poverty_public)
+```
+
+* We fail to reject Ho1 at 95% significance level, poverty is not correlated to % of children covered in health insurance
+
+* We reject Ho2 at 95% significance level, poverty is positively correlated to % of children covered in public health insurance
+  + 1% increase in poverty leads to 0.16970 % increase of % of children covered in public insurance. 
+  + R-squared: 0.002569 
+
+#### Plot
+
+```{r warning = FALSE}
+
+# plot
+health_ins_dat|>
+  ggplot(aes(x=perc_Poverty,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=.7)+
+  theme_minimal()
+
+# plot
+health_ins_dat|>
+  ggplot(aes(x=perc_Poverty,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = 0.8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=-.2)+
+  theme_minimal()
+```
+
+***
+
+## 7. Foreign Origin Non Citizen
+
+* Ho1: % population foreign origin non citizen is not correlated with % of children covered in health insurance 
+* Ha1: % population foreign origin non citizen is correlated with % of children covered in health insurance 
+
+* Ho2: % population foreign origin non citizen is not correlated with % of children covered in public health insurance 
+* Ha2: % population foreign origin non citizen is correlated with % of children covered in public health insurance 
+
+#### Data Exploration
+```{r}
+health_ins_dat|>
+  ggplot(aes(x=Geo_County, y=perc_Origin_FO_NCitizen, fill=Geo_County))+
+  geom_boxplot(outlier.size=0.5,outlier.fill="grey", outlier.alpha=.2)+
+  scale_fill_brewer(palette = "Dark2")+
+  theme_minimal()
+```
+
+#### Linear Regression
+```{r warning = FALSE}
+# health insurance enrollment rate children under 18 vs percentage population foreign origin non citizen
+model_child_with_ins_foreign <- lm(perc_children_with_ins~
+        perc_Origin_FO_NCitizen,
+        data = health_ins_dat)
+summary(model_child_with_ins_foreign)
+
+#public insurance
+model_child_with_ins_foreign_public <- lm(perc_children_with_ins_public~
+        perc_Origin_FO_NCitizen,
+        data = health_ins_dat)
+summary(model_child_with_ins_foreign_public)
+
+```
+
+* We reject Ho1 at 95% significance level, % population foreign origin non citizen is negatively correlated to % of children covered in public health insurance
+  + 1% increase in population foreign origin non citizen leads to 0.066641 % decrease of % of children covered in public insurance. 
+  + R-squared: 0.02668 
+
+* We reject Ho2 at 95% significance level, % population foreign origin non citizen is positively correlated to % of children covered in public health insurance
+  + 1% increase in population foreign origin non citizen leads to 1.13834 % increase of % of children covered in public insurance. 
+  + R-squared: 0.16 
+
+#### Plot
+
+```{r warning = FALSE}
+
+# plot
+health_ins_dat|>
+  ggplot(aes(x=perc_Origin_FO_NCitizen,y=perc_children_with_ins, col=Geo_County)) +
+  geom_point(size = .8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=0.7)+
+  theme_minimal()
+
+# plot
+health_ins_dat|>
+  ggplot(aes(x=perc_Origin_FO_NCitizen,y=perc_children_with_ins_public, col=Geo_County)) +
+  geom_point(size = .8, alpha=.2)+
+  facet_wrap(~Geo_County)+
+  geom_smooth(method = lm)+
+  scale_color_brewer(palette = "Dark2")+
+  stat_regline_equation(label.y=1)+
+  theme_minimal()
+
+```
+
+## Multivariate Linear Regression
+#### Children with public insurance
+
+* In this part of the study, I would like to have a model to understand what factors are more correlated with children with public health insurance.
+* I will first be looking at all four county together, then analyze each county individually.
+
+```{r}
+#children with insurance 
+func_children_ins <- function(data){
+  model_children <- lm(perc_children_with_ins~
+        perc_Pop_Black +
+        perc_Pop_Hispanic_Latino +
+        perc_Pop_Asian+
+        perc_Pop_More_Races+
+        perc_Pop_Other_Races+
+      	perc_Poverty+
+      	perc_unemployed_16_over+
+        log(Median_Household_Income_2019)+
+        perc_Origin_FO_NCitizen+
+        perc_Origin_FO_Citizen+
+      	perc_children_in_school,
+      	data = data)
+ summary(model_children)
+}
+
+#children with public insurance 
+func_children_public_ins <- function(data){
+  model_children <- lm(perc_children_with_ins_public~
+        perc_Pop_Black +
+        perc_Pop_Hispanic_Latino +
+        perc_Pop_Asian+
+        perc_Pop_More_Races+
+        perc_Pop_Other_Races+
+      	perc_Poverty+
+      	perc_unemployed_16_over+
+        log(Median_Household_Income_2019)+
+        perc_Origin_FO_NCitizen+
+        perc_Origin_FO_Citizen+
+      	perc_children_in_school,
+      	data = data)
+ summary(model_children)
+}
+
+```
+
+#### Four Counties
+```{r}
+# Four counties - insurance 
+health_ins_dat|>func_children_ins()
+
+# Four counties - public insurance 
+health_ins_dat|>func_children_public_ins()
+```
+
+#### Bronx
+```{r}
+# Bronx - insurance 
+Bronx|>func_children_ins()
+
+# Bronx - public insurance 
+Bronx |>func_children_public_ins()
+```
+__In Bronx County: __
+
+* % of children with health insurance is positively correlated with race (Hispanic and Latino) and children in school. Negatively correlated with population in poverty.
+
+* % of children with public health insurance is positively correlated with race (Black, Hispanic and Latino, Asian, Two or More Races), unemployment, and foreign origin with no citizenship population. Negatively correlated with foreign origin with citizenship.
+
+
+#### Queens
+```{r}
+# Queens - insurance 
+Queens|>func_children_ins()
+
+# Queens - public insurance 
+Queens |>func_children_public_ins()
+```
+__In Queens County: __
+
+* % of children with health insurance is negatively correlated with race (Asian) and foreign origin with no citizenship population
+
+* % of children with public health insurance is positively correlated with race (Black, Hispanic and Latino, Asian, Other Races*), unemployment, and foreign origin with no citizenship population. Negatively correlated with foreign origin with citizenship.
+
+#### Kings
+```{r}
+# Kings - insurance 
+Kings|>func_children_ins()
+
+# Kings - public insurance 
+Kings |>func_children_public_ins()
+```
+__In Kings County: __
+
+* % of children with health insurance is not significantly correlated with any independent variables
+
+* % of children with public health insurance is positively correlated with race (Hispanic and Latino), poverty, unemployment, and foreign origin population with no citizenship. 
+
+#### NewYork
+```{r}
+# New York - insurance 
+NewYork|>func_children_ins()
+
+# New York - public insurance 
+NewYork|>func_children_public_ins()
+```
+__In New York County: __
+
+* % of children with health insurance is not significantly correlated with any independent variables
+
+* % of children with public health insurance is correlated with race (Black, Asian, Latino) and poverty 
+
+***
+
+#### Part II Conclusion
+
+Almost all children have healthcare coverage thanks to the Medicaid, which covers about 50% of all births in the New York state, and Child Health Plus (CHIP) programs, which covers for about 35% of New York's children under 19, that supports families regardless income and immigration status; their parents is much less certain.
+
+##### Interpreting the linear regressions
+
+__When analyzing linear relationship with independent variables separately:__
+
+* Children's with health insurance coverage for all four counties:
+  + Only race, median household income, and foreign origin with no citizenship are statistically significant at 95% significance level.
+  + % school enrollment for children under 18, % of employed population over 16, % of single parents, and % population in poverty are NOT statistically significant at 95% significance level.
+
+* Children's with public health insurance coverage for all four counties:
+  + % of employed population over 16, % school enrollment for children under 18, % population in poverty, and foreign origin with no citizenship are statistically significant at 95% significance level.
+  + % of single parents is NOT statistically significant at 95% significance level.
+  
+__When analyzing using multivariate linear regression:__
+
+* Children's with  health insurance coverage for all four counties:
+  +  % population Asian, and % foreign origin with no citizenship have negative correlations with % children with healthcare coverage, statistically significant at 95% significance level.
+  +  % school enrollment for children under 18, % foreign origin citizen, % single parents, % unemployment, % of children in school, % black, % hispanic/latino, % other races, % two or more races, % in poverty are NOT statistically significant at 95% significance level.
+  
+* Children's with public health insurance coverage for all four counties:
+  + Only median household income (negative), % of employed population over 16,% population in poverty, and foreign origin with no citizenship are statistically significant at 95% significance level.
+  + other factors such as % school enrollment for children under 18, % foreign origin citizen and % of children in school NOT statistically significant at 95% significance level.
+  
+* When analyzing children's with public health insurance coverage for each county individually, the significance and correlation coefficient for each factor changes. For example, all non-white races are significant independent variables for New York, Bronx, and Queens, but not in Kings, where only Hispanic or Latino is significant.
+  + Thus, when suggesting policies or actions for increasing % children with health care coverage, it is important to analyze and study at county or smaller scales to understand the needs and constraints for the specific population and community.
+  + __For example:__
+    + Kings is the only county that there is significant negative correlation between unemployment rate and children's enrollment rate of public healthcare. 
+    + In Queens county, % of children with health insurance is negatively correlated with race (Asian) and foreign origin with no citizenship population. Perhaps the barriers for Asian population are variables not existed in the study, such as languages and culture etc. Thus, health department may want to investigate further into the Asian population and the population without citizenship.
+    
+##### Next steps:
+* We may be able to infer in which region families or adult may need help with getting affordable or subsidized or free healthcare through analyzing how many children are enrolled in the public health insurance.
+
+#### Thoughts on Social Implications or Policy Suggestions
+* New York State address health insurance coverage through broad eligibility for Medicaid Affordable Care Act (ACA)
+* There are various reasons that prevents racial minorities and foreign born population from getting health insurance. For example, "legislative barriers, such as the threat of being labeled a public charge, or a fear of unknown and high out-of-pocket costs may prevent many from seeking medical attention at all" (citation from Health of Asians and Pacifc Islanders in New York City by NYC Health)
+* According to  Community Service Society, there are four main reasons one may decide to not have health insurance: "(1) they are unaware of or do not understand their coverage options and the enrollment processes; (2) they choose not to enroll for political or religious reasons; (3) they have a high risk tolerance and self-perceived good health status; or (4) they consider the coverage available to them to be unaffordable." 
+* To address the barriers:
+  + 1. Health related social work groups may consider targeting areas with higher concentration racial minorities and foreign born population
+  + 2. Host information session, hand out flyers, or conduct other forms of communication in the native languages to the uninsured immigrant populations to address concerns and issues that they have about insurance.
+  + 3. Increase enrollment timeline flexibility by introducing additional eligible enrollment time frame/life events outside of the open enrollment period to address coverage gaps and other time related limitations
+  + 4. Combine enrollment eligibility check with other services, such as tax return.
+  + 5. Provide more subsidy options for low-income population
+  + 6. Help more children enroll in free or subsided health insurance through schools, or use school as one of the messenger to communicate insurance options to the parents.
+  + 7. Actions and evaluations should be county specific.
+
+* Policies should be county specific. For example, race is more highly correlated to health insurance access in New York and Queens comparing to Bronx.
+* One idea is to help more children enroll in free or heavily subsided health coverages with school system, or use school as one of the messenger to communicate insurance options to the parents. 
+
+*** 
+
+Sources:
+1.https://www1.nyc.gov/assets/doh/downloads/pdf/episrv/asian-pacific-islander-health-2021.pdf
+2.https://cbcny.org/research/narrowing-new-yorks-health-insurance-coverage-gap
+3.https://www.researchgate.net/publication/324066442_Factors_Associated_with_Health_Insurance_Status_in_an_Asian_American_Population_in_New_York_City_Analysis_of_a_Community-Based_Survey
+4.https://www.nyccare.nyc/about/
+5.https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6158120/
+
+```{r warning = FALSE, message=FALSE, results = "hide", echo=FALSE}
+
+##### how to make a long table #####
+health_ins_dat_small<-health_ins_dat%>%
+  pivot_longer(cols = grep("Households_", names(health_ins_dat), value=TRUE),
+               names_to = "Households_Income_Range",
+               values_to = "Income_Counts")%>%
+  select(c("Households_Income_Range", "Income_Counts"))
+
+health_ins_dat_small|>
+  mutate(newcol =
+           case_when(
+             Households_Income_Range %in% c("Households_$30000_to_$34999","Households_$35000_to_$39999") ~ "30k",
+             TRUE~"other"
+               ))|>
+  select("newcol")
+
+#grep("Households_", names(health_ins_dat), value=TRUE)
+```
+
+https://www1.nyc.gov/assets/doh/downloads/pdf/epi/databrief100.pdf
